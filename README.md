@@ -29,7 +29,7 @@ This application translates machine learning predictions into **actionable exper
 
 ## Key Features
 
-### 🔮 Prediction Under New Conditions
+### Prediction Under New Conditions
 
 - Input new experimental combinations
 - Output:
@@ -71,8 +71,7 @@ This application translates machine learning predictions into **actionable exper
 - **Hyperparameter Tuning**: Optuna (cross-validated RMSE)
 - **Uncertainty Estimation**: Bootstrap ensemble predictions
 - **Decision Metric**:  
-  \[
-  \text{Robust Score} = \mu - \lambda \sigma
-  \]
+  [Robust Score = mu - lambda*sigma[
 
 ---
+
