@@ -71,7 +71,8 @@ This application translates machine learning predictions into **actionable exper
 - **Hyperparameter Tuning**: Optuna (cross-validated RMSE)
 - **Uncertainty Estimation**: Bootstrap ensemble predictions
 - **Decision Metric**:  
-  [Robust Score = mu - lambda*sigma[
+  [Robust Score = mu - lambda*sigma]
 
 ---
+
 
