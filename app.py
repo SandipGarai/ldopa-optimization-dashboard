@@ -57,80 +57,6 @@ st.set_page_config(
 sns.set(style="whitegrid", font_scale=1.1)
 
 # =============================================================================
-# ACCESSIBILITY & DARK-MODE VISIBILITY FIXES
-# =============================================================================
-st.markdown(
-    """
-    <style>
-    /* ---------- GLOBAL TEXT ---------- */
-    html, body, [class*="css"] {
-        color: #FAFAFA;
-    }
-
-    /* ---------- HEADERS ---------- */
-    h1, h2, h3, h4, h5, h6 {
-        color: #FAFAFA !important;
-    }
-
-    /* ---------- TABS ---------- */
-    button[data-baseweb="tab"] {
-        font-size: 16px;
-        color: #FAFAFA !important;
-    }
-
-    button[data-baseweb="tab"][aria-selected="true"] {
-        border-bottom: 3px solid #2C7BE5;
-        font-weight: 600;
-    }
-
-    /* ---------- WIDGET LABELS ---------- */
-    label, .stSelectbox label, .stSlider label, .stRadio label {
-        color: #FAFAFA !important;
-        font-weight: 500;
-    }
-
-    /* ---------- SELECTBOX / INPUT TEXT ---------- */
-    div[data-baseweb="select"] span {
-        color: #111111 !important;
-    }
-
-    /* ---------- BUTTON ---------- */
-    button[kind="primary"] {
-        background-color: #2C7BE5 !important;
-        color: white !important;
-        font-weight: 600;
-        border-radius: 6px;
-    }
-
-    /* ---------- METRICS ---------- */
-    div[data-testid="metric-container"] {
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        padding: 10px;
-    }
-
-    div[data-testid="metric-container"] label {
-        color: #D1D5DB !important;
-        font-size: 14px;
-    }
-
-    div[data-testid="metric-container"] div {
-        color: #FAFAFA !important;
-        font-size: 22px;
-        font-weight: 700;
-    }
-
-    /* ---------- DATAFRAME ---------- */
-    .stDataFrame {
-        background-color: white;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# =============================================================================
 # PATHS
 # =============================================================================
 MODEL_PATH = "Results/ML_Model_Selection/Final_Model/CatBoost_Final_Optuna.cbm"
@@ -391,5 +317,6 @@ with tabs[4]:
         })
         st.download_button("Download PDF", pdf,
                            "LDOPA_Report.pdf", "application/pdf")
+
 
 
