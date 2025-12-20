@@ -88,6 +88,7 @@ bootstrap_preds, boot_df = load_bootstrap()
 FACTOR_COLS = [
     c for c in boot_df.columns
     if c not in [
+        "Predicted_LDOPA", 
         "Mean_Predicted_LDOPA",
         "Std_Predicted_LDOPA",
         "CI_05",
@@ -316,3 +317,4 @@ with tabs[4]:
         })
         st.download_button("Download PDF", pdf,
                            "LDOPA_Report.pdf", "application/pdf")
+
