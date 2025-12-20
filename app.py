@@ -14,39 +14,6 @@ from reportlab.lib.styles import getSampleStyleSheet
 import plotly.graph_objects as go
 
 # =============================================================================
-# PAGE THEME
-# =============================================================================
-theme = st.sidebar.radio(
-    "Theme",
-    ["Light", "Dark"],
-    index=0
-)
-if theme == "Dark":
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background-color: #0E1117;
-            color: #FAFAFA;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background-color: #FFFFFF;
-            color: #262730;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-# =============================================================================
 # PAGE CONFIG
 # =============================================================================
 st.set_page_config(
@@ -54,6 +21,174 @@ st.set_page_config(
     layout="wide"
 )
 
+# =============================================================================
+# THEME CONFIGURATION WITH ENHANCED VISIBILITY
+# =============================================================================
+theme = st.sidebar.radio(
+    "Theme",
+    ["Light", "Dark"],
+    index=0
+)
+
+if theme == "Dark":
+    st.markdown(
+        """
+        <style>
+        /* Main background */
+        .stApp {
+            background-color: #0E1117;
+            color: #FAFAFA;
+        }
+        
+        /* Headers and titles */
+        h1, h2, h3, h4, h5, h6 {
+            color: #FFFFFF !important;
+        }
+        
+        /* Regular text and paragraphs */
+        p, span, div, label {
+            color: #E0E0E0 !important;
+        }
+        
+        /* Tab labels */
+        .stTabs [data-baseweb="tab-list"] button {
+            color: #FFFFFF !important;
+        }
+        
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+            color: #2C7BE5 !important;
+        }
+        
+        /* Metric labels and values */
+        [data-testid="stMetricLabel"] {
+            color: #E0E0E0 !important;
+        }
+        
+        [data-testid="stMetricValue"] {
+            color: #FFFFFF !important;
+        }
+        
+        /* Selectbox and input labels */
+        .stSelectbox label, .stSlider label {
+            color: #FFFFFF !important;
+        }
+        
+        /* Selectbox dropdown */
+        .stSelectbox > div > div {
+            background-color: #262730 !important;
+            color: #FFFFFF !important;
+        }
+        
+        /* Selectbox selected value */
+        .stSelectbox [data-baseweb="select"] > div {
+            background-color: #1E1E1E !important;
+            color: #FFFFFF !important;
+        }
+        
+        /* Dropdown options */
+        [role="option"] {
+            background-color: #262730 !important;
+            color: #FFFFFF !important;
+        }
+        
+        [role="option"]:hover {
+            background-color: #2C7BE5 !important;
+            color: #FFFFFF !important;
+        }
+        
+        /* Button styling */
+        .stButton > button {
+            background-color: #2C7BE5 !important;
+            color: #FFFFFF !important;
+            border: none !important;
+        }
+        
+        .stButton > button:hover {
+            background-color: #1e5bb8 !important;
+            color: #FFFFFF !important;
+        }
+        
+        /* Download button */
+        .stDownloadButton > button {
+            background-color: #2C7BE5 !important;
+            color: #FFFFFF !important;
+        }
+        
+        /* Slider */
+        .stSlider [data-baseweb="slider"] {
+            background-color: #262730 !important;
+        }
+        
+        /* DataFrame */
+        .stDataFrame {
+            color: #E0E0E0 !important;
+        }
+        
+        /* Sidebar */
+        [data-testid="stSidebar"] {
+            background-color: #1E1E1E !important;
+        }
+        
+        [data-testid="stSidebar"] * {
+            color: #E0E0E0 !important;
+        }
+        
+        /* Radio buttons */
+        .stRadio label {
+            color: #E0E0E0 !important;
+        }
+        
+        /* Markdown text */
+        .stMarkdown {
+            color: #E0E0E0 !important;
+        }
+        
+        /* Code blocks */
+        code {
+            color: #FF6B6B !important;
+            background-color: #262730 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    plotly_template = "plotly_dark"
+    mpl_style = "dark_background"
+else:
+    st.markdown(
+        """
+        <style>
+        /* Light theme styling */
+        .stApp {
+            background-color: #FFFFFF;
+            color: #262730;
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: #262730 !important;
+        }
+        
+        p, span, div, label {
+            color: #262730 !important;
+        }
+        
+        .stButton > button {
+            background-color: #2C7BE5 !important;
+            color: #FFFFFF !important;
+        }
+        
+        .stButton > button:hover {
+            background-color: #1e5bb8 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    plotly_template = "plotly_white"
+    mpl_style = "seaborn-v0_8-whitegrid"
+
+# Set matplotlib style based on theme
+plt.style.use(mpl_style if theme == "Dark" else "seaborn-v0_8-whitegrid")
 sns.set(style="whitegrid", font_scale=1.1)
 
 # =============================================================================
@@ -67,20 +202,17 @@ BOOTSTRAP_CSV = "Results/Optimization/Uncertainty/Bootstrap_Predictions.csv"
 # LOAD MODEL & DATA
 # =============================================================================
 
-
 @st.cache_resource
 def load_model():
     model = CatBoostRegressor()
     model.load_model(MODEL_PATH)
     return model
 
-
 @st.cache_data
 def load_bootstrap():
     preds = np.load(BOOTSTRAP_NPY)
     df = pd.read_csv(BOOTSTRAP_CSV)
     return preds, df
-
 
 model = load_model()
 bootstrap_preds, boot_df = load_bootstrap()
@@ -166,18 +298,24 @@ with tabs[0]:
         m2.metric("Uncertainty (σ)", f"{std_pred:.1f}")
         m3.metric("90% CI", f"[{ci05:.1f}, {ci95:.1f}]")
 
-        # Interactive uncertainty plot
+        # Interactive uncertainty plot with theme-aware colors
         fig = go.Figure()
-        fig.add_histogram(x=boot_vals, nbinsx=40, name="Bootstrap")
-        fig.add_vline(x=mean_pred, line_color="red", name="Mean")
-        fig.add_vline(x=ci05, line_dash="dash",
-                      line_color="black", name="CI 5%")
-        fig.add_vline(x=ci95, line_dash="dash",
-                      line_color="black", name="CI 95%")
+        fig.add_histogram(x=boot_vals, nbinsx=40, name="Bootstrap",
+                         marker_color="#2C7BE5")
+        fig.add_vline(x=mean_pred, line_color="red", 
+                     annotation_text="Mean", annotation_position="top")
+        fig.add_vline(x=ci05, line_dash="dash", line_color="orange",
+                     annotation_text="CI 5%", annotation_position="top left")
+        fig.add_vline(x=ci95, line_dash="dash", line_color="orange",
+                     annotation_text="CI 95%", annotation_position="top right")
+        
         fig.update_layout(
             title="Prediction Uncertainty Distribution",
             xaxis_title="Predicted L-DOPA",
-            yaxis_title="Frequency"
+            yaxis_title="Frequency",
+            template=plotly_template,
+            showlegend=True,
+            height=500
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -199,6 +337,8 @@ with tabs[1]:
     best_robust = opt_df.loc[opt_df["Robust_Score"].idxmax()]
     best_safe = opt_df.loc[opt_df["Std_Predicted_LDOPA"].idxmin()]
 
+    st.subheader("Recommended Experimental Strategies")
+    
     st.dataframe(pd.DataFrame([
         {"Strategy": "Max Yield", **best_mean[FACTOR_COLS].to_dict()},
         {"Strategy": "Robust Optimum", **best_robust[FACTOR_COLS].to_dict()},
@@ -212,34 +352,55 @@ with tabs[2]:
     st.header("Mean–Risk Trade-off & Response Surfaces")
 
     # ---- Pareto with color coding ----
-    fig, ax = plt.subplots(figsize=(6, 5))
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Set background color based on theme
+    if theme == "Dark":
+        fig.patch.set_facecolor('#0E1117')
+        ax.set_facecolor('#0E1117')
+        text_color = '#FFFFFF'
+    else:
+        fig.patch.set_facecolor('#FFFFFF')
+        ax.set_facecolor('#FFFFFF')
+        text_color = '#262730'
+    
     ax.scatter(opt_df["Std_Predicted_LDOPA"],
                opt_df["Mean_Predicted_LDOPA"],
-               alpha=0.4, label="All")
+               alpha=0.4, label="All", c='gray')
 
     ax.scatter(best_mean["Std_Predicted_LDOPA"],
                best_mean["Mean_Predicted_LDOPA"],
-               c="red", s=120, label="Max Yield")
+               c="red", s=150, label="Max Yield", edgecolors='white', linewidths=2)
 
     ax.scatter(best_robust["Std_Predicted_LDOPA"],
                best_robust["Mean_Predicted_LDOPA"],
-               c="green", s=120, label="Robust")
+               c="green", s=150, label="Robust", edgecolors='white', linewidths=2)
 
     ax.scatter(best_safe["Std_Predicted_LDOPA"],
                best_safe["Mean_Predicted_LDOPA"],
-               c="blue", s=120, label="Low Risk")
+               c="blue", s=150, label="Low Risk", edgecolors='white', linewidths=2)
 
-    ax.set_xlabel("Risk (σ)")
-    ax.set_ylabel("Expected L-DOPA")
-    ax.set_title("Mean–Risk Trade-off")
-    ax.legend()
+    ax.set_xlabel("Risk (σ)", color=text_color, fontsize=12)
+    ax.set_ylabel("Expected L-DOPA", color=text_color, fontsize=12)
+    ax.set_title("Mean–Risk Trade-off", color=text_color, fontsize=14, fontweight='bold')
+    ax.tick_params(colors=text_color)
+    ax.legend(facecolor=fig.patch.get_facecolor(), edgecolor=text_color, 
+             labelcolor=text_color)
+    
+    # Set spine colors
+    for spine in ax.spines.values():
+        spine.set_edgecolor(text_color)
+    
     st.pyplot(fig)
 
     # ---- 3D Response Surface ----
     st.subheader("3D Response Surface")
 
-    f1 = st.selectbox("X-axis factor", FACTOR_COLS, index=0)
-    f2 = st.selectbox("Y-axis factor", FACTOR_COLS, index=1)
+    col_a, col_b = st.columns(2)
+    with col_a:
+        f1 = st.selectbox("X-axis factor", FACTOR_COLS, index=0)
+    with col_b:
+        f2 = st.selectbox("Y-axis factor", FACTOR_COLS, index=1)
 
     if f1 != f2:
         pivot = opt_df.pivot_table(
@@ -252,7 +413,8 @@ with tabs[2]:
                 z=pivot.values,
                 x=list(range(len(pivot.columns))),
                 y=list(range(len(pivot.index))),
-                colorscale="Viridis"
+                colorscale="Viridis",
+                colorbar=dict(title="L-DOPA")
             )]
         )
 
@@ -260,12 +422,13 @@ with tabs[2]:
             scene=dict(
                 xaxis=dict(title=f2,
                            tickvals=list(range(len(pivot.columns))),
-                           ticktext=pivot.columns),
+                           ticktext=[str(c) for c in pivot.columns]),
                 yaxis=dict(title=f1,
                            tickvals=list(range(len(pivot.index))),
-                           ticktext=pivot.index),
+                           ticktext=[str(i) for i in pivot.index]),
                 zaxis=dict(title="Predicted L-DOPA")
             ),
+            template=plotly_template,
             height=650
         )
 
@@ -276,15 +439,22 @@ with tabs[2]:
 # =============================================================================
 with tabs[3]:
     st.header("Suggested Validation Experiments")
+    
+    st.markdown("""
+    These experiments have high uncertainty relative to their predicted yield, 
+    making them valuable for model improvement and knowledge discovery.
+    """)
 
     opt_df["Exploration_Score"] = (
         opt_df["Std_Predicted_LDOPA"] /
         opt_df["Mean_Predicted_LDOPA"]
     )
 
+    validation_df = opt_df.sort_values("Exploration_Score", ascending=False).head(3)
+    display_cols = FACTOR_COLS + ["Mean_Predicted_LDOPA", "Std_Predicted_LDOPA", "Exploration_Score"]
+    
     st.dataframe(
-        opt_df.sort_values("Exploration_Score", ascending=False)
-        .head(3)[FACTOR_COLS + ["Mean_Predicted_LDOPA", "Std_Predicted_LDOPA"]],
+        validation_df[display_cols].reset_index(drop=True),
         use_container_width=True
     )
 
@@ -293,30 +463,53 @@ with tabs[3]:
 # =============================================================================
 with tabs[4]:
     st.header("Export Decision Report")
+    
+    st.markdown("""
+    Generate a comprehensive PDF report summarizing the optimal experimental 
+    conditions identified through the optimization process.
+    """)
 
     def generate_pdf(summary):
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer)
         styles = getSampleStyleSheet()
-        story = [Paragraph("L-DOPA Optimization Report",
-                           styles["Title"]), Spacer(1, 12)]
+        story = [
+            Paragraph("L-DOPA Optimization Report", styles["Title"]), 
+            Spacer(1, 20),
+            Paragraph(f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", 
+                     styles["Normal"]),
+            Spacer(1, 20)
+        ]
 
-        for k, v in summary.items():
-            story.append(Paragraph(f"<b>{k}</b>: {v}", styles["Normal"]))
+        for strategy, conditions in summary.items():
+            story.append(Paragraph(f"<b>{strategy}</b>", styles["Heading2"]))
             story.append(Spacer(1, 8))
+            
+            for key, value in conditions.items():
+                story.append(Paragraph(f"• {key}: {value}", styles["Normal"]))
+            
+            story.append(Spacer(1, 16))
 
         doc.build(story)
         buffer.seek(0)
         return buffer
 
-    if st.button("Download PDF"):
-        pdf = generate_pdf({
-            "Max Yield": best_mean[FACTOR_COLS].to_dict(),
-            "Robust Optimum": best_robust[FACTOR_COLS].to_dict(),
-            "Low Risk": best_safe[FACTOR_COLS].to_dict()
-        })
-        st.download_button("Download PDF", pdf,
-                           "LDOPA_Report.pdf", "application/pdf")
-
-
-
+    col_x, col_y = st.columns([1, 3])
+    
+    with col_x:
+        if st.button("Generate PDF Report", use_container_width=True):
+            pdf = generate_pdf({
+                "Maximum Yield Strategy": best_mean[FACTOR_COLS].to_dict(),
+                "Robust Optimum Strategy": best_robust[FACTOR_COLS].to_dict(),
+                "Low Risk Strategy": best_safe[FACTOR_COLS].to_dict()
+            })
+            
+            st.download_button(
+                "📥 Download PDF", 
+                pdf,
+                "LDOPA_Optimization_Report.pdf", 
+                "application/pdf",
+                use_container_width=True
+            )
+            
+            st.success("✅ Report generated successfully!")
