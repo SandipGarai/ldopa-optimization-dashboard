@@ -22,6 +22,13 @@ st.set_page_config(
 )
 
 # =============================================================================
+# SESSION STATE INITIALIZATION (CRITICAL)
+# =============================================================================
+if "prediction_done" not in st.session_state:
+    st.session_state.prediction_done = False
+    st.session_state.prediction_results = None
+
+# =============================================================================
 # THEME CONFIGURATION WITH ENHANCED VISIBILITY
 # =============================================================================
 theme = st.sidebar.radio(
@@ -260,20 +267,23 @@ tabs = st.tabs([
 with tabs[0]:
     st.header("Predict L-DOPA under New Experimental Conditions")
 
-    col1, col2, col3, col4 = st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
 
-    with col1:
+    with c1:
         concentration = st.selectbox(
             "Concentration", sorted(boot_df["Concentration"].unique()))
-    with col2:
+    with c2:
         sl_ratio = st.selectbox(
             "S/L ratio", sorted(boot_df["S/L ratio"].unique()))
-    with col3:
+    with c3:
         pretreat = st.selectbox(
-            "Pre-treatment", sorted(boot_df["Pre-treatments"].unique()))
-    with col4:
+            "Pre-treatments", sorted(boot_df["Pre-treatments"].unique()))
+    with c4:
         time = st.selectbox("Time", sorted(boot_df["Time"].unique()))
 
+    # ---------------------------
+    # BUTTON
+    # ---------------------------
     if st.button("Predict L-DOPA"):
         X_new = pd.DataFrame([{
             "Concentration": concentration,
@@ -282,75 +292,61 @@ with tabs[0]:
             "Time": time
         }])
 
-        # -----------------------------------------------------------
-# Match condition in bootstrap table
-# -----------------------------------------------------------
-mask = (
-    (boot_df["Concentration"] == concentration) &
-    (boot_df["S/L ratio"] == sl_ratio) &
-    (boot_df["Pre-treatments"] == pretreat) &
-    (boot_df["Time"] == time)
-)
+        mask = (
+            (boot_df["Concentration"] == concentration) &
+            (boot_df["S/L ratio"] == sl_ratio) &
+            (boot_df["Pre-treatments"] == pretreat) &
+            (boot_df["Time"] == time)
+        )
 
-# -----------------------------------------------------------
-# CASE 1 — Condition exists in bootstrap results
-# -----------------------------------------------------------
-if mask.any():
+        # ---- Existing combination → bootstrap posterior ----
+        if mask.any():
+            idx = boot_df[mask].index[0]
+            mean_pred = boot_df.loc[idx, "Mean_Predicted_LDOPA"]
+            std_pred = boot_df.loc[idx, "Std_Predicted_LDOPA"]
+            ci05 = boot_df.loc[idx, "CI_05"]
+            ci95 = boot_df.loc[idx, "CI_95"]
+            boot_vals = bootstrap_preds[:, idx]
 
-    idx = boot_df[mask].index[0]
+        # ---- Truly new combination ----
+        else:
+            mean_pred = model.predict(X_new)[0]
+            std_pred = boot_df["Std_Predicted_LDOPA"].mean()
+            boot_vals = np.random.normal(mean_pred, std_pred, 1000)
+            ci05, ci95 = np.percentile(boot_vals, [5, 95])
 
-    # ✅ Use BOOTSTRAP posterior statistics (NOT model point prediction)
-    mean_pred = boot_df.loc[idx, "Mean_Predicted_LDOPA"]
-    std_pred = boot_df.loc[idx, "Std_Predicted_LDOPA"]
-    ci05 = boot_df.loc[idx, "CI_05"]
-    ci95 = boot_df.loc[idx, "CI_95"]
+        st.session_state.prediction_done = True
+        st.session_state.prediction_results = {
+            "mean": mean_pred,
+            "std": std_pred,
+            "ci05": ci05,
+            "ci95": ci95,
+            "boot_vals": boot_vals
+        }
 
-    boot_vals = bootstrap_preds[:, idx]
+    # ---------------------------
+    # DISPLAY (ONLY AFTER CLICK)
+    # ---------------------------
+    if st.session_state.prediction_done:
+        res = st.session_state.prediction_results
 
-# -----------------------------------------------------------
-# CASE 2 — Truly NEW condition (not in optimization grid)
-# -----------------------------------------------------------
-else:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Posterior Mean LDOPA (μ)", f"{res['mean']:.2f}")
+        m2.metric("Uncertainty (σ)", f"{res['std']:.2f}")
+        m3.metric("90% CI", f"[{res['ci05']:.2f}, {res['ci95']:.2f}]")
 
-    # Fallback: model point prediction
-    mean_pred = model.predict(X_new)[0]
+        fig = go.Figure()
+        fig.add_histogram(x=res["boot_vals"], nbinsx=40)
+        fig.add_vline(x=res["mean"], line_color="red", annotation_text="Mean")
+        fig.add_vline(x=res["ci05"], line_dash="dash", line_color="orange")
+        fig.add_vline(x=res["ci95"], line_dash="dash", line_color="orange")
 
-    # Use global uncertainty as proxy
-    std_pred = boot_df["Std_Predicted_LDOPA"].mean()
-
-    # Approximate posterior
-    boot_vals = np.random.normal(mean_pred, std_pred, 1000)
-    ci05, ci95 = np.percentile(boot_vals, [5, 95])
-
-# -----------------------------------------------------------
-# DISPLAY METRICS
-# -----------------------------------------------------------
-m1, m2, m3 = st.columns(3)
-
-m1.metric("Posterior Mean LDOPA (μ)", f"{mean_pred:.1f}")
-m2.metric("Uncertainty (σ)", f"{std_pred:.1f}")
-m3.metric("90% CI", f"[{ci05:.1f}, {ci95:.1f}]")
-
-# Interactive uncertainty plot with theme-aware colors
-fig = go.Figure()
-fig.add_histogram(x=boot_vals, nbinsx=40, name="Bootstrap",
-                  marker_color="#2C7BE5")
-fig.add_vline(x=mean_pred, line_color="red",
-              annotation_text="Mean", annotation_position="top")
-fig.add_vline(x=ci05, line_dash="dash", line_color="orange",
-              annotation_text="CI 5%", annotation_position="top left")
-fig.add_vline(x=ci95, line_dash="dash", line_color="orange",
-              annotation_text="CI 95%", annotation_position="top right")
-
-fig.update_layout(
-    title="Prediction Uncertainty Distribution",
-    xaxis_title="Predicted L-DOPA",
-    yaxis_title="Frequency",
-    template=plotly_template,
-    showlegend=True,
-    height=500
-)
-st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(
+            title="Prediction Uncertainty Distribution",
+            template=plotly_template,
+            height=450
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 # =============================================================================
 # TAB 2 — OPTIMIZATION
