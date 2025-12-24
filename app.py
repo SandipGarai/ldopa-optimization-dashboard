@@ -202,11 +202,13 @@ BOOTSTRAP_CSV = "Results/Optimization/Uncertainty/Bootstrap_Predictions.csv"
 # LOAD MODEL & DATA
 # =============================================================================
 
+
 @st.cache_resource
 def load_model():
     model = CatBoostRegressor()
     model.load_model(MODEL_PATH)
     return model
+
 
 @st.cache_data
 def load_bootstrap():
@@ -214,13 +216,14 @@ def load_bootstrap():
     df = pd.read_csv(BOOTSTRAP_CSV)
     return preds, df
 
+
 model = load_model()
 bootstrap_preds, boot_df = load_bootstrap()
 
 FACTOR_COLS = [
     c for c in boot_df.columns
     if c not in [
-        "Predicted_LDOPA", 
+        "Predicted_LDOPA",
         "Mean_Predicted_LDOPA",
         "Std_Predicted_LDOPA",
         "CI_05",
@@ -279,45 +282,75 @@ with tabs[0]:
             "Time": time
         }])
 
-        mean_pred = model.predict(X_new)[0]
+        # -----------------------------------------------------------
+# Match condition in bootstrap table
+# -----------------------------------------------------------
+mask = (
+    (boot_df["Concentration"] == concentration) &
+    (boot_df["S/L ratio"] == sl_ratio) &
+    (boot_df["Pre-treatments"] == pretreat) &
+    (boot_df["Time"] == time)
+)
 
-        mask = (
-            (boot_df["Concentration"] == concentration) &
-            (boot_df["S/L ratio"] == sl_ratio) &
-            (boot_df["Pre-treatments"] == pretreat) &
-            (boot_df["Time"] == time)
-        )
+# -----------------------------------------------------------
+# CASE 1 — Condition exists in bootstrap results
+# -----------------------------------------------------------
+if mask.any():
 
-        idx = boot_df[mask].index[0]
-        boot_vals = bootstrap_preds[:, idx]
-        std_pred = boot_vals.std()
-        ci05, ci95 = np.percentile(boot_vals, [5, 95])
+    idx = boot_df[mask].index[0]
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Mean L-DOPA", f"{mean_pred:.1f}")
-        m2.metric("Uncertainty (σ)", f"{std_pred:.1f}")
-        m3.metric("90% CI", f"[{ci05:.1f}, {ci95:.1f}]")
+    # ✅ Use BOOTSTRAP posterior statistics (NOT model point prediction)
+    mean_pred = boot_df.loc[idx, "Mean_Predicted_LDOPA"]
+    std_pred = boot_df.loc[idx, "Std_Predicted_LDOPA"]
+    ci05 = boot_df.loc[idx, "CI_05"]
+    ci95 = boot_df.loc[idx, "CI_95"]
 
-        # Interactive uncertainty plot with theme-aware colors
-        fig = go.Figure()
-        fig.add_histogram(x=boot_vals, nbinsx=40, name="Bootstrap",
-                         marker_color="#2C7BE5")
-        fig.add_vline(x=mean_pred, line_color="red", 
-                     annotation_text="Mean", annotation_position="top")
-        fig.add_vline(x=ci05, line_dash="dash", line_color="orange",
-                     annotation_text="CI 5%", annotation_position="top left")
-        fig.add_vline(x=ci95, line_dash="dash", line_color="orange",
-                     annotation_text="CI 95%", annotation_position="top right")
-        
-        fig.update_layout(
-            title="Prediction Uncertainty Distribution",
-            xaxis_title="Predicted L-DOPA",
-            yaxis_title="Frequency",
-            template=plotly_template,
-            showlegend=True,
-            height=500
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    boot_vals = bootstrap_preds[:, idx]
+
+# -----------------------------------------------------------
+# CASE 2 — Truly NEW condition (not in optimization grid)
+# -----------------------------------------------------------
+else:
+
+    # Fallback: model point prediction
+    mean_pred = model.predict(X_new)[0]
+
+    # Use global uncertainty as proxy
+    std_pred = boot_df["Std_Predicted_LDOPA"].mean()
+
+    # Approximate posterior
+    boot_vals = np.random.normal(mean_pred, std_pred, 1000)
+    ci05, ci95 = np.percentile(boot_vals, [5, 95])
+
+# -----------------------------------------------------------
+# DISPLAY METRICS
+# -----------------------------------------------------------
+m1, m2, m3 = st.columns(3)
+
+m1.metric("Posterior Mean LDOPA (μ)", f"{mean_pred:.1f}")
+m2.metric("Uncertainty (σ)", f"{std_pred:.1f}")
+m3.metric("90% CI", f"[{ci05:.1f}, {ci95:.1f}]")
+
+# Interactive uncertainty plot with theme-aware colors
+fig = go.Figure()
+fig.add_histogram(x=boot_vals, nbinsx=40, name="Bootstrap",
+                  marker_color="#2C7BE5")
+fig.add_vline(x=mean_pred, line_color="red",
+              annotation_text="Mean", annotation_position="top")
+fig.add_vline(x=ci05, line_dash="dash", line_color="orange",
+              annotation_text="CI 5%", annotation_position="top left")
+fig.add_vline(x=ci95, line_dash="dash", line_color="orange",
+              annotation_text="CI 95%", annotation_position="top right")
+
+fig.update_layout(
+    title="Prediction Uncertainty Distribution",
+    xaxis_title="Predicted L-DOPA",
+    yaxis_title="Frequency",
+    template=plotly_template,
+    showlegend=True,
+    height=500
+)
+st.plotly_chart(fig, use_container_width=True)
 
 # =============================================================================
 # TAB 2 — OPTIMIZATION
@@ -338,7 +371,7 @@ with tabs[1]:
     best_safe = opt_df.loc[opt_df["Std_Predicted_LDOPA"].idxmin()]
 
     st.subheader("Recommended Experimental Strategies")
-    
+
     st.dataframe(pd.DataFrame([
         {"Strategy": "Max Yield", **best_mean[FACTOR_COLS].to_dict()},
         {"Strategy": "Robust Optimum", **best_robust[FACTOR_COLS].to_dict()},
@@ -353,7 +386,7 @@ with tabs[2]:
 
     # ---- Pareto with color coding ----
     fig, ax = plt.subplots(figsize=(8, 6))
-    
+
     # Set background color based on theme
     if theme == "Dark":
         fig.patch.set_facecolor('#0E1117')
@@ -363,7 +396,7 @@ with tabs[2]:
         fig.patch.set_facecolor('#FFFFFF')
         ax.set_facecolor('#FFFFFF')
         text_color = '#262730'
-    
+
     ax.scatter(opt_df["Std_Predicted_LDOPA"],
                opt_df["Mean_Predicted_LDOPA"],
                alpha=0.4, label="All", c='gray')
@@ -382,15 +415,16 @@ with tabs[2]:
 
     ax.set_xlabel("Risk (σ)", color=text_color, fontsize=12)
     ax.set_ylabel("Expected L-DOPA", color=text_color, fontsize=12)
-    ax.set_title("Mean–Risk Trade-off", color=text_color, fontsize=14, fontweight='bold')
+    ax.set_title("Mean–Risk Trade-off", color=text_color,
+                 fontsize=14, fontweight='bold')
     ax.tick_params(colors=text_color)
-    ax.legend(facecolor=fig.patch.get_facecolor(), edgecolor=text_color, 
-             labelcolor=text_color)
-    
+    ax.legend(facecolor=fig.patch.get_facecolor(), edgecolor=text_color,
+              labelcolor=text_color)
+
     # Set spine colors
     for spine in ax.spines.values():
         spine.set_edgecolor(text_color)
-    
+
     st.pyplot(fig)
 
     # ---- 3D Response Surface ----
@@ -439,7 +473,7 @@ with tabs[2]:
 # =============================================================================
 with tabs[3]:
     st.header("Suggested Validation Experiments")
-    
+
     st.markdown("""
     These experiments have high uncertainty relative to their predicted yield, 
     making them valuable for model improvement and knowledge discovery.
@@ -450,9 +484,11 @@ with tabs[3]:
         opt_df["Mean_Predicted_LDOPA"]
     )
 
-    validation_df = opt_df.sort_values("Exploration_Score", ascending=False).head(3)
-    display_cols = FACTOR_COLS + ["Mean_Predicted_LDOPA", "Std_Predicted_LDOPA", "Exploration_Score"]
-    
+    validation_df = opt_df.sort_values(
+        "Exploration_Score", ascending=False).head(3)
+    display_cols = FACTOR_COLS + \
+        ["Mean_Predicted_LDOPA", "Std_Predicted_LDOPA", "Exploration_Score"]
+
     st.dataframe(
         validation_df[display_cols].reset_index(drop=True),
         use_container_width=True
@@ -463,7 +499,7 @@ with tabs[3]:
 # =============================================================================
 with tabs[4]:
     st.header("Export Decision Report")
-    
+
     st.markdown("""
     Generate a comprehensive PDF report summarizing the optimal experimental 
     conditions identified through the optimization process.
@@ -474,20 +510,20 @@ with tabs[4]:
         doc = SimpleDocTemplate(buffer)
         styles = getSampleStyleSheet()
         story = [
-            Paragraph("L-DOPA Optimization Report", styles["Title"]), 
+            Paragraph("L-DOPA Optimization Report", styles["Title"]),
             Spacer(1, 20),
-            Paragraph(f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", 
-                     styles["Normal"]),
+            Paragraph(f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}",
+                      styles["Normal"]),
             Spacer(1, 20)
         ]
 
         for strategy, conditions in summary.items():
             story.append(Paragraph(f"<b>{strategy}</b>", styles["Heading2"]))
             story.append(Spacer(1, 8))
-            
+
             for key, value in conditions.items():
                 story.append(Paragraph(f"• {key}: {value}", styles["Normal"]))
-            
+
             story.append(Spacer(1, 16))
 
         doc.build(story)
@@ -495,7 +531,7 @@ with tabs[4]:
         return buffer
 
     col_x, col_y = st.columns([1, 3])
-    
+
     with col_x:
         if st.button("Generate PDF Report", use_container_width=True):
             pdf = generate_pdf({
@@ -503,13 +539,13 @@ with tabs[4]:
                 "Robust Optimum Strategy": best_robust[FACTOR_COLS].to_dict(),
                 "Low Risk Strategy": best_safe[FACTOR_COLS].to_dict()
             })
-            
+
             st.download_button(
-                "📥 Download PDF", 
+                "📥 Download PDF",
                 pdf,
-                "LDOPA_Optimization_Report.pdf", 
+                "LDOPA_Optimization_Report.pdf",
                 "application/pdf",
                 use_container_width=True
             )
-            
+
             st.success("✅ Report generated successfully!")
