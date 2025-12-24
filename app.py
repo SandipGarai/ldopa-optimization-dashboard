@@ -432,12 +432,24 @@ with tabs[2]:
     add_highlight(best_safe, "Low Risk", "blue")
 
     fig_pareto.update_layout(
-        title="Interactive Mean–Risk Trade-off (Pareto Front)",
-        xaxis_title="Risk (σ)",
-        yaxis_title="Expected L-DOPA (μ)",
-        template=plotly_template,
-        height=600
-    )
+    title="Interactive Mean–Risk Trade-off (Pareto Front)",
+    xaxis_title="Risk (σ)",
+    yaxis_title="Expected L-DOPA (μ)",
+    template=plotly_template,
+    height=600,
+
+    # ---- FIX OVERLAP HERE ----
+    legend=dict(
+        x=0.01,          # left side
+        y=0.99,
+        xanchor="left",
+        yanchor="top",
+        bgcolor="rgba(0,0,0,0)",  # transparent
+        borderwidth=0
+    ),
+    margin=dict(r=80)   # leave space for colorbar
+)
+
 
     st.plotly_chart(fig_pareto, use_container_width=True)
 
@@ -564,3 +576,4 @@ with tabs[4]:
             )
 
             st.success("✅ Report generated successfully!")
+
