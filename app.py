@@ -380,50 +380,70 @@ with tabs[1]:
 with tabs[2]:
     st.header("Mean–Risk Trade-off & Response Surfaces")
 
-    # ---- Pareto with color coding ----
-    fig, ax = plt.subplots(figsize=(8, 6))
+    # =========================================================
+    # INTERACTIVE MEAN–RISK PARETO FRONT (PLOTLY)
+    # =========================================================
 
-    # Set background color based on theme
-    if theme == "Dark":
-        fig.patch.set_facecolor('#0E1117')
-        ax.set_facecolor('#0E1117')
-        text_color = '#FFFFFF'
-    else:
-        fig.patch.set_facecolor('#FFFFFF')
-        ax.set_facecolor('#FFFFFF')
-        text_color = '#262730'
+    hover_text = []
+    for _, row in opt_df.iterrows():
+        txt = "<br>".join([
+            f"<b>Concentration:</b> {row['Concentration']}",
+            f"<b>S/L ratio:</b> {row['S/L ratio']}",
+            f"<b>Pre-treatment:</b> {row['Pre-treatments']}",
+            f"<b>Time:</b> {row['Time']}",
+            f"<b>Mean LDOPA (μ):</b> {row['Mean_Predicted_LDOPA']:.2f}",
+            f"<b>Uncertainty (σ):</b> {row['Std_Predicted_LDOPA']:.2f}"
+        ])
+        hover_text.append(txt)
 
-    ax.scatter(opt_df["Std_Predicted_LDOPA"],
-               opt_df["Mean_Predicted_LDOPA"],
-               alpha=0.4, label="All", c='gray')
+    fig_pareto = go.Figure()
 
-    ax.scatter(best_mean["Std_Predicted_LDOPA"],
-               best_mean["Mean_Predicted_LDOPA"],
-               c="red", s=150, label="Max Yield", edgecolors='white', linewidths=2)
+    # ---- All conditions ----
+    fig_pareto.add_trace(go.Scatter(
+        x=opt_df["Std_Predicted_LDOPA"],
+        y=opt_df["Mean_Predicted_LDOPA"],
+        mode="markers",
+        marker=dict(
+            size=8,
+            color=opt_df["Mean_Predicted_LDOPA"],
+            colorscale="Viridis",
+            showscale=True,
+            colorbar=dict(title="Mean LDOPA")
+        ),
+        text=hover_text,
+        hoverinfo="text",
+        name="All Conditions"
+    ))
 
-    ax.scatter(best_robust["Std_Predicted_LDOPA"],
-               best_robust["Mean_Predicted_LDOPA"],
-               c="green", s=150, label="Robust", edgecolors='white', linewidths=2)
+    # ---- Highlight key strategies ----
+    def add_highlight(row, name, color):
+        fig_pareto.add_trace(go.Scatter(
+            x=[row["Std_Predicted_LDOPA"]],
+            y=[row["Mean_Predicted_LDOPA"]],
+            mode="markers",
+            marker=dict(size=16, color=color, symbol="star"),
+            text=[f"<b>{name}</b>"],
+            hoverinfo="text",
+            name=name
+        ))
 
-    ax.scatter(best_safe["Std_Predicted_LDOPA"],
-               best_safe["Mean_Predicted_LDOPA"],
-               c="blue", s=150, label="Low Risk", edgecolors='white', linewidths=2)
+    add_highlight(best_mean, "Max Yield", "red")
+    add_highlight(best_robust, "Robust Optimum", "green")
+    add_highlight(best_safe, "Low Risk", "blue")
 
-    ax.set_xlabel("Risk (σ)", color=text_color, fontsize=12)
-    ax.set_ylabel("Expected L-DOPA", color=text_color, fontsize=12)
-    ax.set_title("Mean–Risk Trade-off", color=text_color,
-                 fontsize=14, fontweight='bold')
-    ax.tick_params(colors=text_color)
-    ax.legend(facecolor=fig.patch.get_facecolor(), edgecolor=text_color,
-              labelcolor=text_color)
+    fig_pareto.update_layout(
+        title="Interactive Mean–Risk Trade-off (Pareto Front)",
+        xaxis_title="Risk (σ)",
+        yaxis_title="Expected L-DOPA (μ)",
+        template=plotly_template,
+        height=600
+    )
 
-    # Set spine colors
-    for spine in ax.spines.values():
-        spine.set_edgecolor(text_color)
+    st.plotly_chart(fig_pareto, use_container_width=True)
 
-    st.pyplot(fig)
-
-    # ---- 3D Response Surface ----
+    # =========================================================
+    # INTERACTIVE 3D RESPONSE SURFACE (ALREADY PLOTLY)
+    # =========================================================
     st.subheader("3D Response Surface")
 
     col_a, col_b = st.columns(2)
@@ -434,35 +454,34 @@ with tabs[2]:
 
     if f1 != f2:
         pivot = opt_df.pivot_table(
-            index=f1, columns=f2,
-            values="Mean_Predicted_LDOPA", aggfunc="mean"
+            index=f1,
+            columns=f2,
+            values="Mean_Predicted_LDOPA",
+            aggfunc="mean"
         )
 
         fig3d = go.Figure(
             data=[go.Surface(
                 z=pivot.values,
-                x=list(range(len(pivot.columns))),
-                y=list(range(len(pivot.index))),
+                x=pivot.columns.astype(str),
+                y=pivot.index.astype(str),
                 colorscale="Viridis",
-                colorbar=dict(title="L-DOPA")
+                colorbar=dict(title="Mean LDOPA")
             )]
         )
 
         fig3d.update_layout(
             scene=dict(
-                xaxis=dict(title=f2,
-                           tickvals=list(range(len(pivot.columns))),
-                           ticktext=[str(c) for c in pivot.columns]),
-                yaxis=dict(title=f1,
-                           tickvals=list(range(len(pivot.index))),
-                           ticktext=[str(i) for i in pivot.index]),
-                zaxis=dict(title="Predicted L-DOPA")
+                xaxis_title=f2,
+                yaxis_title=f1,
+                zaxis_title="Mean LDOPA"
             ),
             template=plotly_template,
             height=650
         )
 
         st.plotly_chart(fig3d, use_container_width=True)
+
 
 # =============================================================================
 # TAB 4 — VALIDATION
