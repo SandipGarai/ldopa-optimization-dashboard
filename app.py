@@ -240,6 +240,55 @@ FACTOR_COLS = [
 ]
 
 # =============================================================================
+# GLOBAL CONTROLS — Risk Aversion Slider (sidebar, shared across all tabs)
+# =============================================================================
+st.sidebar.markdown("---")
+st.sidebar.subheader("Optimization Settings")
+
+st.sidebar.markdown(
+    """
+    **Risk Aversion (λ)** controls how much uncertainty is penalized
+    when ranking experimental conditions.
+
+    Each condition is scored as:
+
+    **Score = μ − λ·σ**
+
+    where μ is the predicted mean L-DOPA yield and σ is the prediction
+    uncertainty (standard deviation across 200 bootstrap models).
+
+    - **λ = 0**: rank purely by predicted yield; uncertainty is ignored.
+    - **λ = 1**: balanced trade-off between yield and uncertainty (default).
+    - **λ = 2**: strongly favour low-uncertainty conditions even at the
+      cost of some yield.
+
+    Increasing λ makes the optimizer more conservative, pushing the
+    recommended conditions toward those with reproducible, stable
+    predictions rather than the highest but uncertain peak.
+    """
+)
+
+lambda_val = st.sidebar.slider(
+    "Risk Aversion (λ)",
+    min_value=0.0,
+    max_value=2.0,
+    value=1.0,
+    step=0.1
+)
+
+# Recompute opt_df and strategy rows for every lambda_val change.
+# This is the single source of truth used by ALL tabs.
+opt_df = boot_df.copy()
+opt_df["Robust_Score"] = (
+    opt_df["Mean_Predicted_LDOPA"]
+    - lambda_val * opt_df["Std_Predicted_LDOPA"]
+)
+
+best_mean = opt_df.loc[opt_df["Mean_Predicted_LDOPA"].idxmax()]
+best_robust = opt_df.loc[opt_df["Robust_Score"].idxmax()]
+best_safe = opt_df.loc[opt_df["Std_Predicted_LDOPA"].idxmin()]
+
+# =============================================================================
 # HEADER
 # =============================================================================
 st.title("🔬 L-DOPA Process Optimization & Decision Support System")
@@ -317,10 +366,10 @@ with tabs[0]:
 
         st.session_state.prediction_done = True
         st.session_state.prediction_results = {
-            "mean": mean_pred,
-            "std": std_pred,
-            "ci05": ci05,
-            "ci95": ci95,
+            "mean":      mean_pred,
+            "std":       std_pred,
+            "ci05":      ci05,
+            "ci95":      ci95,
             "boot_vals": boot_vals
         }
 
@@ -332,14 +381,15 @@ with tabs[0]:
 
         m1, m2, m3 = st.columns(3)
         m1.metric("Posterior Mean LDOPA (μ)", f"{res['mean']:.2f}")
-        m2.metric("Uncertainty (σ)", f"{res['std']:.2f}")
+        m2.metric("Uncertainty (σ)",           f"{res['std']:.2f}")
         m3.metric("90% CI", f"[{res['ci05']:.2f}, {res['ci95']:.2f}]")
 
         fig = go.Figure()
         fig.add_histogram(x=res["boot_vals"], nbinsx=40)
-        fig.add_vline(x=res["mean"], line_color="red", annotation_text="Mean")
-        fig.add_vline(x=res["ci05"], line_dash="dash", line_color="orange")
-        fig.add_vline(x=res["ci95"], line_dash="dash", line_color="orange")
+        fig.add_vline(x=res["mean"], line_color="red",
+                      annotation_text="Mean")
+        fig.add_vline(x=res["ci05"], line_dash="dash",    line_color="orange")
+        fig.add_vline(x=res["ci95"], line_dash="dash",    line_color="orange")
 
         fig.update_layout(
             title="Prediction Uncertainty Distribution",
@@ -354,25 +404,64 @@ with tabs[0]:
 with tabs[1]:
     st.header("Optimal & Robust Experimental Conditions")
 
-    lambda_val = st.slider("Risk Aversion (λ)", 0.0, 2.0, 1.0, 0.1)
-
-    opt_df = boot_df.copy()
-    opt_df["Robust_Score"] = (
-        opt_df["Mean_Predicted_LDOPA"] -
-        lambda_val * opt_df["Std_Predicted_LDOPA"]
+    # lambda_val, opt_df, best_* are computed globally in the sidebar block above.
+    # Displaying the active setting here for user clarity.
+    st.info(
+        f"**Active Risk Aversion λ = {lambda_val}**: "
+        f"Robust Score = μ − {lambda_val}·σ  "
+        f"*(adjust the slider in the sidebar to update all results)*"
     )
-
-    best_mean = opt_df.loc[opt_df["Mean_Predicted_LDOPA"].idxmax()]
-    best_robust = opt_df.loc[opt_df["Robust_Score"].idxmax()]
-    best_safe = opt_df.loc[opt_df["Std_Predicted_LDOPA"].idxmin()]
 
     st.subheader("Recommended Experimental Strategies")
 
-    st.dataframe(pd.DataFrame([
-        {"Strategy": "Max Yield", **best_mean[FACTOR_COLS].to_dict()},
-        {"Strategy": "Robust Optimum", **best_robust[FACTOR_COLS].to_dict()},
-        {"Strategy": "Low Risk", **best_safe[FACTOR_COLS].to_dict()}
-    ]), use_container_width=True)
+    strategy_table = pd.DataFrame([
+        {
+            "Strategy": "Max Yield",
+            **best_mean[FACTOR_COLS].to_dict(),
+            "Mean LDOPA (μ)":   round(best_mean["Mean_Predicted_LDOPA"], 2),
+            "Uncertainty (σ)":  round(best_mean["Std_Predicted_LDOPA"],  2),
+            "Robust Score":     round(best_mean["Robust_Score"],          2),
+        },
+        {
+            "Strategy": "Robust Optimum",
+            **best_robust[FACTOR_COLS].to_dict(),
+            "Mean LDOPA (μ)":   round(best_robust["Mean_Predicted_LDOPA"], 2),
+            "Uncertainty (σ)":  round(best_robust["Std_Predicted_LDOPA"],  2),
+            "Robust Score":     round(best_robust["Robust_Score"],          2),
+        },
+        {
+            "Strategy": "Low Risk",
+            **best_safe[FACTOR_COLS].to_dict(),
+            "Mean LDOPA (μ)":   round(best_safe["Mean_Predicted_LDOPA"], 2),
+            "Uncertainty (σ)":  round(best_safe["Std_Predicted_LDOPA"],  2),
+            "Robust Score":     round(best_safe["Robust_Score"],          2),
+        },
+    ])
+
+    st.dataframe(strategy_table, use_container_width=True)
+
+    # ------------------------------------------------------------------
+    # Top-10 Robust Conditions ranked by current lambda
+    # ------------------------------------------------------------------
+    st.subheader(f"Top 10 Conditions by Robust Score  (λ = {lambda_val})")
+
+    top10_display = FACTOR_COLS + [
+        "Mean_Predicted_LDOPA",
+        "Std_Predicted_LDOPA",
+        "CI_05",
+        "CI_95",
+        "Robust_Score"
+    ]
+
+    top10 = (
+        opt_df.sort_values("Robust_Score", ascending=False)
+              .head(10)[top10_display]
+              .reset_index(drop=True)
+    )
+    top10.index += 1          # rank from 1
+    top10.index.name = "Rank"
+
+    st.dataframe(top10, use_container_width=True)
 
 # =============================================================================
 # TAB 3 — TRADE-OFF & SURFACES
@@ -380,10 +469,13 @@ with tabs[1]:
 with tabs[2]:
     st.header("Mean–Risk Trade-off & Response Surfaces")
 
+    # opt_df and best_* are already up-to-date with the sidebar lambda_val.
+
     # =========================================================
     # INTERACTIVE MEAN–RISK PARETO FRONT (PLOTLY)
     # =========================================================
 
+    # Rebuild hover_text from opt_df which is recomputed on every lambda change.
     hover_text = []
     for _, row in opt_df.iterrows():
         txt = "<br>".join([
@@ -392,23 +484,24 @@ with tabs[2]:
             f"<b>Pre-treatment:</b> {row['Pre-treatments']}",
             f"<b>Time:</b> {row['Time']}",
             f"<b>Mean LDOPA (μ):</b> {row['Mean_Predicted_LDOPA']:.2f}",
-            f"<b>Uncertainty (σ):</b> {row['Std_Predicted_LDOPA']:.2f}"
+            f"<b>Uncertainty (σ):</b> {row['Std_Predicted_LDOPA']:.2f}",
+            f"<b>Robust Score:</b> {row['Robust_Score']:.2f}",
         ])
         hover_text.append(txt)
 
     fig_pareto = go.Figure()
 
-    # ---- All conditions ----
+    # ---- All conditions (colour = Robust Score, updates with λ) ----
     fig_pareto.add_trace(go.Scatter(
         x=opt_df["Std_Predicted_LDOPA"],
         y=opt_df["Mean_Predicted_LDOPA"],
         mode="markers",
         marker=dict(
             size=8,
-            color=opt_df["Mean_Predicted_LDOPA"],
+            color=opt_df["Robust_Score"],
             colorscale="Viridis",
             showscale=True,
-            colorbar=dict(title="Mean LDOPA")
+            colorbar=dict(title=f"Robust Score<br>(λ={lambda_val})")
         ),
         text=hover_text,
         hoverinfo="text",
@@ -427,31 +520,31 @@ with tabs[2]:
             name=name
         ))
 
-    add_highlight(best_mean, "Max Yield", "red")
+    add_highlight(best_mean,   "Max Yield",      "red")
     add_highlight(best_robust, "Robust Optimum", "green")
-    add_highlight(best_safe, "Low Risk", "blue")
+    add_highlight(best_safe,   "Low Risk",       "blue")
 
     fig_pareto.update_layout(
-    title="Interactive Mean–Risk Trade-off (Pareto Front)",
-    xaxis_title="Risk (σ)",
-    yaxis_title="Expected L-DOPA (μ)",
-    template=plotly_template,
-    height=600,
+        title=f"Interactive Mean-Risk Trade-off (Pareto Front)  |  λ = {lambda_val}",
+        xaxis_title="Risk (σ)",
+        yaxis_title="Expected L-DOPA (μ)",
+        template=plotly_template,
+        height=600,
+        legend=dict(
+            x=0.01,
+            y=0.99,
+            xanchor="left",
+            yanchor="top",
+            bgcolor="rgba(0,0,0,0)",
+            borderwidth=0
+        ),
+        margin=dict(r=80)
+    )
 
-    # ---- FIX OVERLAP HERE ----
-    legend=dict(
-        x=0.01,          # left side
-        y=0.99,
-        xanchor="left",
-        yanchor="top",
-        bgcolor="rgba(0,0,0,0)",  # transparent
-        borderwidth=0
-    ),
-    margin=dict(r=80)   # leave space for colorbar
-)
-
-
-    st.plotly_chart(fig_pareto, use_container_width=True)
+    # key=f"pareto_{lambda_val}" forces Streamlit to treat this as a new
+    # widget whenever lambda changes, guaranteeing a full re-render.
+    st.plotly_chart(fig_pareto, use_container_width=True,
+                    key=f"pareto_{lambda_val}")
 
     # =========================================================
     # INTERACTIVE 3D RESPONSE SURFACE (ALREADY PLOTLY)
@@ -532,15 +625,25 @@ with tabs[4]:
     conditions identified through the optimization process.
     """)
 
-    def generate_pdf(summary):
+    def generate_pdf(summary, lam):
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer)
         styles = getSampleStyleSheet()
         story = [
             Paragraph("L-DOPA Optimization Report", styles["Title"]),
             Spacer(1, 20),
-            Paragraph(f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}",
-                      styles["Normal"]),
+            Paragraph(
+                f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}",
+                styles["Normal"]
+            ),
+            Paragraph(
+                f"Risk Aversion Parameter: λ = {lam}",
+                styles["Normal"]
+            ),
+            Paragraph(
+                f"Robust Score Formula: Score = μ − {lam}·σ",
+                styles["Normal"]
+            ),
             Spacer(1, 20)
         ]
 
@@ -561,19 +664,21 @@ with tabs[4]:
 
     with col_x:
         if st.button("Generate PDF Report", use_container_width=True):
-            pdf = generate_pdf({
-                "Maximum Yield Strategy": best_mean[FACTOR_COLS].to_dict(),
-                "Robust Optimum Strategy": best_robust[FACTOR_COLS].to_dict(),
-                "Low Risk Strategy": best_safe[FACTOR_COLS].to_dict()
-            })
+            pdf = generate_pdf(
+                {
+                    "Maximum Yield Strategy":  best_mean[FACTOR_COLS].to_dict(),
+                    "Robust Optimum Strategy": best_robust[FACTOR_COLS].to_dict(),
+                    "Low Risk Strategy":       best_safe[FACTOR_COLS].to_dict(),
+                },
+                lam=lambda_val
+            )
 
             st.download_button(
-                "📥 Download PDF",
+                "Download PDF",
                 pdf,
                 "LDOPA_Optimization_Report.pdf",
                 "application/pdf",
                 use_container_width=True
             )
 
-            st.success("✅ Report generated successfully!")
-
+            st.success("Report generated successfully.")
